@@ -18,3 +18,9 @@ func (m *ModelWithTimestamps) BeforeUpdate(ctx context.Context, query *bun.Updat
 	m.UpdatedAt = time.Now()
 	return nil
 }
+
+type BaseModel struct {
+	ModelWithTimestamps
+
+	ID int64 `bun:"id,pk,autoincrement"`
+}
