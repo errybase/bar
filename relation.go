@@ -8,21 +8,18 @@ import (
 	"github.com/uptrace/bun/schema"
 )
 
-type BelongsTo[T any] struct {
-	Model        any
-	RelationName string
-}
+type BelongsTo[T any] relation[T]
 
 func (r BelongsTo[T]) Get(ctx context.Context, db bun.IDB) (T, error) {
 	var t T
-	cols := r.appendRelModel(db, &t)
+	cols := relation[T](r).appendRelModel(db, &t)
 	err := db.NewSelect().Model(&t).WherePK(cols...).Scan(ctx)
 	return t, err
 }
 
 func (r BelongsTo[T]) Set(ctx context.Context, db bun.IDB, t T) error {
-	r.appendBaseModel(db, t)
-	return Model(r.Model).Update(ctx, db, updateOmitZero)
+	relation[T](r).appendBaseModel(db, t)
+	return Model(r.Model).Update(ctx, db)
 }
 
 func (r BelongsTo[T]) Create(ctx context.Context, db bun.IDB, t *T) error {
@@ -34,7 +31,32 @@ func (r BelongsTo[T]) Create(ctx context.Context, db bun.IDB, t *T) error {
 	})
 }
 
-func (r BelongsTo[T]) appendRelModel(db bun.IDB, t *T) []string {
+type HasOne[T any] relation[T]
+
+func (r HasOne[T]) Get(ctx context.Context, db bun.IDB) (T, error) {
+	var t T
+	cols := relation[T](r).appendRelModel(db, &t)
+	err := db.NewSelect().Model(&t).WherePK(cols...).Scan(ctx)
+	return t, err
+}
+
+func (r HasOne[T]) Set(ctx context.Context, db bun.IDB, t *T) error {
+	relation[T](r).appendRelModel(db, t)
+	return Model(t).Update(ctx, db)
+}
+
+func (r HasOne[T]) Create(ctx context.Context, db bun.IDB, t *T) error {
+	relation[T](r).appendRelModel(db, t)
+	return Model(t).Create(ctx, db)
+
+}
+
+type relation[T any] struct {
+	Model        any
+	RelationName string
+}
+
+func (r relation[T]) appendRelModel(db bun.IDB, t *T) []string {
 	rel := r.rel(db)
 	bv := reflect.ValueOf(r.Model).Elem()
 	tv := reflect.ValueOf(t).Elem()
@@ -49,7 +71,7 @@ func (r BelongsTo[T]) appendRelModel(db bun.IDB, t *T) []string {
 	return cols
 }
 
-func (r BelongsTo[T]) appendBaseModel(db bun.IDB, t T) []string {
+func (r relation[T]) appendBaseModel(db bun.IDB, t T) []string {
 	rel := r.rel(db)
 	bv := reflect.ValueOf(r.Model).Elem()
 	tv := reflect.ValueOf(t)
@@ -64,7 +86,7 @@ func (r BelongsTo[T]) appendBaseModel(db bun.IDB, t T) []string {
 	return cols
 }
 
-func (r BelongsTo[T]) rel(db bun.IDB) *schema.Relation {
+func (r relation[T]) rel(db bun.IDB) *schema.Relation {
 	for name, rel := range r.baseTable(db).Relations {
 		if name == r.RelationName {
 			return rel
@@ -73,14 +95,10 @@ func (r BelongsTo[T]) rel(db bun.IDB) *schema.Relation {
 	return nil
 }
 
-func (r BelongsTo[T]) baseTable(db bun.IDB) *schema.Table {
+func (r relation[T]) baseTable(db bun.IDB) *schema.Table {
 	return db.Dialect().Tables().ByModel(r.baseModel())
 }
 
-func (r BelongsTo[T]) baseModel() string {
+func (r relation[T]) baseModel() string {
 	return reflect.TypeOf(r.Model).Elem().Name()
-}
-
-func updateOmitZero(uq *bun.UpdateQuery) *bun.UpdateQuery {
-	return uq.OmitZero()
 }
