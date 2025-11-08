@@ -12,7 +12,8 @@ type BelongsTo[T any] relation[T]
 
 func (r BelongsTo[T]) Get(ctx context.Context, db bun.IDB) (T, error) {
 	var t T
-	cols := relation[T](r).appendRelModel(db, &t)
+	relation[T](r).appendRelModel(db, &t)
+	cols := relation[T](r).joinCols(db)
 	err := db.NewSelect().Model(&t).WherePK(cols...).Scan(ctx)
 	return t, err
 }
@@ -35,7 +36,8 @@ type HasOne[T any] relation[T]
 
 func (r HasOne[T]) Get(ctx context.Context, db bun.IDB) (T, error) {
 	var t T
-	cols := relation[T](r).appendRelModel(db, &t)
+	relation[T](r).appendRelModel(db, &t)
+	cols := relation[T](r).joinCols(db)
 	err := db.NewSelect().Model(&t).WherePK(cols...).Scan(ctx)
 	return t, err
 }
@@ -48,7 +50,18 @@ func (r HasOne[T]) Set(ctx context.Context, db bun.IDB, t *T) error {
 func (r HasOne[T]) Create(ctx context.Context, db bun.IDB, t *T) error {
 	relation[T](r).appendRelModel(db, t)
 	return Model(t).Create(ctx, db)
+}
 
+func (r HasOne[T]) Update(ctx context.Context, db bun.IDB, t *T) error {
+	cols := relation[T](r).joinCols(db)
+	_, err := db.NewUpdate().Model(t).WherePK(cols...).ExcludeColumn(cols...).Exec(ctx)
+	return err
+}
+
+func (r HasOne[T]) Delete(ctx context.Context, db bun.IDB, t *T) error {
+	cols := relation[T](r).joinCols(db)
+	_, err := db.NewDelete().Model(t).WherePK(cols...).Exec(ctx)
+	return err
 }
 
 type relation[T any] struct {
@@ -56,19 +69,15 @@ type relation[T any] struct {
 	RelationName string
 }
 
-func (r relation[T]) appendRelModel(db bun.IDB, t *T) []string {
+func (r relation[T]) appendRelModel(db bun.IDB, t *T) {
 	rel := r.rel(db)
 	bv := reflect.ValueOf(r.Model).Elem()
 	tv := reflect.ValueOf(t).Elem()
 
-	var cols []string
 	for i, joinPK := range rel.JoinPKs {
-		cols = append(cols, joinPK.Name)
 		basePK := rel.BasePKs[i]
 		tv.FieldByName(joinPK.GoName).Set(bv.FieldByName(basePK.GoName))
 	}
-
-	return cols
 }
 
 func (r relation[T]) appendBaseModel(db bun.IDB, t T) []string {
@@ -83,6 +92,14 @@ func (r relation[T]) appendBaseModel(db bun.IDB, t T) []string {
 		bv.FieldByName(basePK.GoName).Set(tv.FieldByName(joinPK.GoName))
 	}
 
+	return cols
+}
+
+func (r relation[T]) joinCols(db bun.IDB) []string {
+	var cols []string
+	for _, pk := range r.rel(db).JoinPKs {
+		cols = append(cols, pk.Name)
+	}
 	return cols
 }
 

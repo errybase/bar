@@ -68,6 +68,21 @@ func main() {
 		fmt.Println("new story of user 1:", story3)
 	}
 
+	// update story 3 of user 1
+	story3.Title = "Love story"
+	if err := user1.RelStory().Update(ctx, db, &story3); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("updated story 3 of user 1:", story3)
+	}
+
+	// delete story 3 of user 1
+	if err := user1.RelStory().Delete(ctx, db, &story3); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("deleted story 3 of user 1:", story3)
+	}
+
 	// get associated author of story 1
 	if u, err := story1.RelAuthor().Get(ctx, db); err != nil {
 		panic(err)
