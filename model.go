@@ -24,3 +24,16 @@ type BaseModel struct {
 
 	ID int64 `bun:"id,pk,autoincrement"`
 }
+
+type modelQuery struct {
+	model any
+}
+
+func Model(model any) modelQuery {
+	return modelQuery{model}
+}
+
+func (q modelQuery) Create(ctx context.Context, db bun.IDB) error {
+	_, err := db.NewInsert().Model(q.model).Exec(ctx)
+	return err
+}
