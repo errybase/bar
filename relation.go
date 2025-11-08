@@ -21,9 +21,17 @@ func (r BelongsTo[T]) Get(ctx context.Context, db bun.IDB) (T, error) {
 }
 
 func (r BelongsTo[T]) Set(ctx context.Context, db bun.IDB, t T) error {
-	cols := r.appendBaseModel(db, t)
-	_, err := db.NewUpdate().Model(r.Model).Column(cols...).WherePK().Exec(ctx)
-	return err
+	r.appendBaseModel(db, t)
+	return Model(r.Model).Update(ctx, db, updateOmitZero)
+}
+
+func (r BelongsTo[T]) Create(ctx context.Context, db bun.IDB, t *T) error {
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if err := Model(t).Create(ctx, tx); err != nil {
+			return err
+		}
+		return r.Set(ctx, tx, *t)
+	})
 }
 
 func (r BelongsTo[T]) appendRelModel(db bun.IDB, t *T) []string {
@@ -71,4 +79,8 @@ func (r BelongsTo[T]) baseTable(db bun.IDB) *schema.Table {
 
 func (r BelongsTo[T]) baseModel() string {
 	return reflect.TypeOf(r.Model).Elem().Name()
+}
+
+func updateOmitZero(uq *bun.UpdateQuery) *bun.UpdateQuery {
+	return uq.OmitZero()
 }
