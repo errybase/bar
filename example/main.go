@@ -35,6 +35,7 @@ func main() {
 	} else {
 		fmt.Println("created users:", users)
 	}
+	user1, user2 := users[0], users[1]
 
 	// create stories
 	stories := initStories(users)
@@ -43,9 +44,46 @@ func main() {
 	} else {
 		fmt.Println("created stories:", stories)
 	}
+	story1, story2 := stories[0], stories[1]
+
+	// get story of user 1
+	if s, err := user1.RelStory().Get(ctx, db); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("story of user 1:", s)
+	}
+
+	// set story of user 1 to story 2
+	if err := user1.RelStory().Set(ctx, db, &story2); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("updated story of user 1:", story2)
+	}
+
+	// create new story for user 1
+	story3 := Story{Title: "Fun story"}
+	if err := user1.RelStory().Create(ctx, db, &story3); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("new story of user 1:", story3)
+	}
+
+	// update story 3 of user 1
+	story3.Title = "Love story"
+	if err := user1.RelStory().Update(ctx, db, &story3); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("updated story 3 of user 1:", story3)
+	}
+
+	// delete story 3 of user 1
+	if err := user1.RelStory().Delete(ctx, db, &story3); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("deleted story 3 of user 1:", story3)
+	}
 
 	// get associated author of story 1
-	story1 := stories[0]
 	if u, err := story1.RelAuthor().Get(ctx, db); err != nil {
 		panic(err)
 	} else {
@@ -53,7 +91,7 @@ func main() {
 	}
 
 	// set author of story 1 to user 2
-	if err := story1.RelAuthor().Set(ctx, db, users[1]); err != nil {
+	if err := story1.RelAuthor().Set(ctx, db, user2); err != nil {
 		panic(err)
 	} else {
 		fmt.Println("updated story 1:", story1)
@@ -81,24 +119,37 @@ func initUsers() []User {
 	}
 }
 
-type User struct {
-	bar.BaseModel
-
-	Name   string
-	Emails []string
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User<id=%d, name=%s, emails=%v, createdAt=%v, updated=%v>", u.ID, u.Name, u.Emails, u.CreatedAt, u.UpdatedAt)
-}
-
 func initStories(users []User) []Story {
 	return []Story{
 		{
 			Title:    "Cool story",
 			AuthorID: users[0].ID,
 		},
+		{
+			Title:    "Sad story",
+			AuthorID: users[1].ID,
+		},
 	}
+}
+
+type User struct {
+	bar.BaseModel
+
+	Name   string
+	Emails []string
+
+	Story *Story `bun:"rel:has-one,join:id=author_id"`
+}
+
+func (u *User) RelStory() bar.HasOne[Story] {
+	return bar.HasOne[Story]{
+		Model:        u,
+		RelationName: "Story",
+	}
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User<id=%d, name=%s, emails=%v, createdAt=%v, updated=%v>", u.ID, u.Name, u.Emails, u.CreatedAt, u.UpdatedAt)
 }
 
 type Story struct {
@@ -106,7 +157,7 @@ type Story struct {
 
 	Title    string
 	AuthorID int64
-	Author   *User `bun:"rel:belongs-to,join:author_id=id"`
+	Author   User `bun:"rel:belongs-to,join:author_id=id"`
 }
 
 func (s *Story) RelAuthor() bar.BelongsTo[User] {
