@@ -23,6 +23,7 @@ func init() {
 
 	db.ResetModel(ctx,
 		(*User)(nil),
+		(*Book)(nil),
 		(*Story)(nil),
 	)
 }
@@ -36,6 +37,15 @@ func main() {
 		fmt.Println("created users:", users)
 	}
 	user1, user2 := users[0], users[1]
+
+	// create books
+	books := initBooks()
+	if err := bar.Model(&books).Create(ctx, db); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("created books:", books)
+	}
+	book1 := books[0]
 
 	// create stories
 	stories := initStories(users)
@@ -83,6 +93,13 @@ func main() {
 		fmt.Println("deleted story 3 of user 1:", story3)
 	}
 
+	// get all stories of book 1
+	if stories, err := book1.RelStories().All(ctx, db); err != nil {
+		panic(err)
+	} else {
+		fmt.Println("all stories of book 1:", stories)
+	}
+
 	// get associated author of story 1
 	if u, err := story1.RelAuthor().Get(ctx, db); err != nil {
 		panic(err)
@@ -115,6 +132,17 @@ func initUsers() []User {
 		{
 			Name:   "root",
 			Emails: []string{"root1@root", "root2@root"},
+		},
+	}
+}
+
+func initBooks() []Book {
+	return []Book{
+		{
+			Name: "Cool book",
+		},
+		{
+			Name: "Sad book",
 		},
 	}
 }
@@ -152,12 +180,34 @@ func (u User) String() string {
 	return fmt.Sprintf("User<id=%d, name=%s, emails=%v, createdAt=%v, updated=%v>", u.ID, u.Name, u.Emails, u.CreatedAt, u.UpdatedAt)
 }
 
+type Book struct {
+	bar.BaseModel
+
+	Name string
+
+	Stories []Story `bun:"rel:has-many,join:id=book_id"`
+}
+
+func (b *Book) RelStories() bar.HasMany[Story] {
+	return bar.HasMany[Story]{
+		Model:        b,
+		RelationName: "Stories",
+	}
+}
+
+func (b Book) String() string {
+	return fmt.Sprintf("Book<id=%d, name=%s, createdAt=%v, updated=%v>", b.ID, b.Name, b.CreatedAt, b.UpdatedAt)
+}
+
 type Story struct {
 	bar.BaseModel
 
 	Title    string
 	AuthorID int64
-	Author   User `bun:"rel:belongs-to,join:author_id=id"`
+	BookID   int64
+
+	Author User `bun:"rel:belongs-to,join:author_id=id"`
+	Book   Book `bun:"rel:belongs-to,join:book_id=id"`
 }
 
 func (s *Story) RelAuthor() bar.BelongsTo[User] {
