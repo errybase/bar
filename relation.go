@@ -64,35 +64,66 @@ func (r HasOne[T]) Delete(ctx context.Context, db bun.IDB, t *T) error {
 	return err
 }
 
+type HasMany[T any] relation[T]
+
+func (r HasMany[T]) All(ctx context.Context, db bun.IDB) ([]T, error) {
+	var models []T
+	err := db.NewSelect().Model(&models).ApplyQueryBuilder(relation[T](r).queryBuilder(db)).Scan(ctx)
+	return models, err
+}
+
+func (r HasMany[T]) First(ctx context.Context, db bun.IDB) (T, error) {
+	var model T
+	err := db.NewSelect().Model(&model).ApplyQueryBuilder(relation[T](r).queryBuilder(db)).Scan(ctx)
+	return model, err
+}
+
 type relation[T any] struct {
 	Model        any
 	RelationName string
 }
 
-func (r relation[T]) appendRelModel(db bun.IDB, t *T) {
-	rel := r.rel(db)
-	bv := reflect.ValueOf(r.Model).Elem()
-	tv := reflect.ValueOf(t).Elem()
+func (r relation[T]) queryBuilder(db bun.IDB) func(bun.QueryBuilder) bun.QueryBuilder {
+	joinTable := r.rel(db).JoinTable
+	tableName := joinTable.Name
+	if joinTable.Alias != "" {
+		tableName = joinTable.Alias
+	}
 
-	for i, joinPK := range rel.JoinPKs {
-		basePK := rel.BasePKs[i]
-		tv.FieldByName(joinPK.GoName).Set(bv.FieldByName(basePK.GoName))
+	return func(qb bun.QueryBuilder) bun.QueryBuilder {
+		q := qb
+		for _, f := range r.fields(db) {
+			q = q.Where("?.? = ?", bun.Ident(tableName), bun.Ident(f.join.Name), f.value.Interface())
+		}
+		return q
 	}
 }
 
-func (r relation[T]) appendBaseModel(db bun.IDB, t T) []string {
-	rel := r.rel(db)
-	bv := reflect.ValueOf(r.Model).Elem()
-	tv := reflect.ValueOf(t)
-
-	var cols []string
-	for i, basePK := range rel.BasePKs {
-		cols = append(cols, basePK.Name)
-		joinPK := rel.JoinPKs[i]
-		bv.FieldByName(basePK.GoName).Set(tv.FieldByName(joinPK.GoName))
+func (r relation[T]) appendRelModel(db bun.IDB, t *T) {
+	v := reflect.ValueOf(t).Elem()
+	for _, f := range r.fields(db) {
+		v.FieldByName(f.join.GoName).Set(f.value)
 	}
+}
 
-	return cols
+func (r relation[T]) appendBaseModel(db bun.IDB, t T) {
+	v := reflect.ValueOf(t)
+	for _, f := range r.fields(db) {
+		r.baseValue().FieldByName(f.base.GoName).Set(v.FieldByName(f.join.GoName))
+	}
+}
+
+func (r relation[T]) fields(db bun.IDB) []field {
+	fields, rel, baseValue := []field{}, r.rel(db), r.baseValue()
+	for i, joinPK := range rel.JoinPKs {
+		basePK := rel.BasePKs[i]
+		fields = append(fields, field{
+			base:  basePK,
+			join:  joinPK,
+			value: baseValue.FieldByName(basePK.GoName),
+		})
+	}
+	return fields
 }
 
 func (r relation[T]) joinCols(db bun.IDB) []string {
@@ -112,10 +143,20 @@ func (r relation[T]) rel(db bun.IDB) *schema.Relation {
 	return nil
 }
 
+func (r relation[T]) baseValue() reflect.Value {
+	return reflect.ValueOf(r.Model).Elem()
+}
+
 func (r relation[T]) baseTable(db bun.IDB) *schema.Table {
 	return db.Dialect().Tables().ByModel(r.baseModel())
 }
 
 func (r relation[T]) baseModel() string {
 	return reflect.TypeOf(r.Model).Elem().Name()
+}
+
+type field struct {
+	base  *schema.Field
+	join  *schema.Field
+	value reflect.Value
 }
