@@ -24,3 +24,11 @@ func (r HasMany[T]) First(ctx context.Context, db bun.IDB) (m T, err error) {
 	}
 	return
 }
+
+func (r HasMany[T]) Create(ctx context.Context, db bun.IDB, models ...*T) error {
+	rel := relation[T](r).rel(db)
+	for _, m := range models {
+		rel.appendRelModel(m)
+	}
+	return Model(&models).Create(ctx, db)
+}
