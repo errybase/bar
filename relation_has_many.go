@@ -2,6 +2,7 @@ package bar
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/uptrace/bun"
 )
@@ -19,8 +20,10 @@ func (r HasMany[T]) First(ctx context.Context, db bun.IDB) (m T, err error) {
 		return sq.Limit(1)
 	}); e != nil {
 		err = e
-	} else {
+	} else if len(models) > 0 {
 		m = models[0]
+	} else {
+		err = sql.ErrNoRows
 	}
 	return
 }
