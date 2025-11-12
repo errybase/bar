@@ -34,10 +34,9 @@ func (r HasManyThrough[R, T]) All(ctx context.Context, db bun.IDB, fns ...func(*
 	return
 }
 
-func (r HasManyThrough[R, T]) First(ctx context.Context, db bun.IDB) (m R, err error) {
-	if models, e := r.All(ctx, db, func(sq *bun.SelectQuery) *bun.SelectQuery {
-		return sq.Limit(1)
-	}); e != nil {
+func (r HasManyThrough[R, T]) First(ctx context.Context, db bun.IDB, fns ...func(*bun.SelectQuery) *bun.SelectQuery) (m R, err error) {
+	fns = append(fns, queryLimit1)
+	if models, e := r.All(ctx, db, fns...); e != nil {
 		err = e
 	} else if len(models) > 0 {
 		m = models[0]

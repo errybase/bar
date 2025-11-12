@@ -15,10 +15,9 @@ func (r HasMany[T]) All(ctx context.Context, db bun.IDB, fns ...func(*bun.Select
 	return
 }
 
-func (r HasMany[T]) First(ctx context.Context, db bun.IDB) (m T, err error) {
-	if models, e := r.All(ctx, db, func(sq *bun.SelectQuery) *bun.SelectQuery {
-		return sq.Limit(1)
-	}); e != nil {
+func (r HasMany[T]) First(ctx context.Context, db bun.IDB, fns ...func(*bun.SelectQuery) *bun.SelectQuery) (m T, err error) {
+	fns = append(fns, queryLimit1)
+	if models, e := r.All(ctx, db, fns...); e != nil {
 		err = e
 	} else if len(models) > 0 {
 		m = models[0]
@@ -34,4 +33,8 @@ func (r HasMany[T]) Create(ctx context.Context, db bun.IDB, models ...*T) error 
 		rel.appendRelModel(m)
 	}
 	return Model(&models).Create(ctx, db)
+}
+
+func queryLimit1(sq *bun.SelectQuery) *bun.SelectQuery {
+	return sq.Limit(1)
 }
