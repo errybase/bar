@@ -2,6 +2,7 @@ package bar
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -44,4 +45,15 @@ func (q modelQuery) Create(ctx context.Context, db bun.IDB) error {
 func (q modelQuery) Update(ctx context.Context, db bun.IDB, fns ...func(*bun.UpdateQuery) *bun.UpdateQuery) error {
 	_, err := db.NewUpdate().Model(q.model).WherePK().Apply(fns...).Exec(ctx)
 	return err
+}
+
+func (q modelQuery) Delete(ctx context.Context, db bun.IDB, fns ...func(*bun.DeleteQuery) *bun.DeleteQuery) error {
+	if r, err := db.NewDelete().Model(q.model).WherePK().Apply(fns...).Exec(ctx); err != nil {
+		return err
+	} else if c, err := r.RowsAffected(); err != nil {
+		return err
+	} else if c == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

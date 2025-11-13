@@ -47,36 +47,53 @@ func (r HasManyThrough[R, T]) First(ctx context.Context, db bun.IDB, fns ...func
 }
 
 func (r HasManyThrough[R, T]) Create(ctx context.Context, db bun.IDB, models ...*R) error {
-	rel := relation[R](r).rel(db)
-
 	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		if err := Model(&models).Create(ctx, tx); err != nil {
 			return err
 		}
 
-		var m2mModels []*T
-		for _, m := range models {
-			m2mModel := new(T)
-			v := reflect.ValueOf(m2mModel).Elem()
-			mv := reflect.ValueOf(m).Elem()
-
-			for i, m2mBasePK := range rel.M2MBasePKs {
-				basePK := rel.BasePKs[i]
-				v.FieldByName(m2mBasePK.GoName).Set(rel.v.FieldByName(basePK.GoName))
-			}
-
-			for i, m2mJoinPK := range rel.M2MJoinPKs {
-				joinPK := rel.JoinPKs[i]
-				v.FieldByName(m2mJoinPK.GoName).Set(mv.FieldByName(joinPK.GoName))
-			}
-
-			m2mModels = append(m2mModels, m2mModel)
-		}
-
+		m2mModels := r.m2mModels(tx, models...)
 		if err := Model(&m2mModels).Create(ctx, tx); err != nil {
 			return err
 		}
 
 		return nil
 	})
+}
+
+func (r HasManyThrough[R, T]) Delete(ctx context.Context, db bun.IDB, models ...*R) error {
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		m2mModels := r.m2mModels(tx, models...)
+		if err := Model(&m2mModels).Delete(ctx, tx); err != nil {
+			return err
+		}
+		if err := Model(&models).Delete(ctx, tx); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (r HasManyThrough[R, T]) m2mModels(db bun.IDB, models ...*R) (m2mModels []*T) {
+	rel := relation[R](r).rel(db)
+
+	for _, m := range models {
+		m2mModel := new(T)
+		v := reflect.ValueOf(m2mModel).Elem()
+		mv := reflect.ValueOf(m).Elem()
+
+		for i, m2mBasePK := range rel.M2MBasePKs {
+			basePK := rel.BasePKs[i]
+			v.FieldByName(m2mBasePK.GoName).Set(rel.v.FieldByName(basePK.GoName))
+		}
+
+		for i, m2mJoinPK := range rel.M2MJoinPKs {
+			joinPK := rel.JoinPKs[i]
+			v.FieldByName(m2mJoinPK.GoName).Set(mv.FieldByName(joinPK.GoName))
+		}
+
+		m2mModels = append(m2mModels, m2mModel)
+	}
+	return
 }
