@@ -37,8 +37,8 @@ func Model(model any) modelQuery {
 	return modelQuery{model}
 }
 
-func (q modelQuery) Create(ctx context.Context, db bun.IDB) error {
-	_, err := db.NewInsert().Model(q.model).Exec(ctx)
+func (q modelQuery) Create(ctx context.Context, db bun.IDB, fns ...func(*bun.InsertQuery) *bun.InsertQuery) error {
+	_, err := db.NewInsert().Model(q.model).Apply(fns...).Exec(ctx)
 	return err
 }
 
