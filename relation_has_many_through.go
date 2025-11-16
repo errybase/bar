@@ -61,6 +61,23 @@ func (r HasManyThrough[R, T]) Create(ctx context.Context, db bun.IDB, models ...
 	})
 }
 
+func (r HasManyThrough[R, T]) Update(ctx context.Context, db bun.IDB, models ...*R) error {
+	m2mModels := r.m2mModels(db, models...)
+	if ok, err := db.NewSelect().Model(&m2mModels).WherePK().Exists(ctx); err != nil {
+		return err
+	} else if !ok {
+		return sql.ErrNoRows
+	}
+
+	if err := Model(&models).Update(ctx, db, func(uq *bun.UpdateQuery) *bun.UpdateQuery {
+		return uq.Bulk()
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r HasManyThrough[R, T]) Delete(ctx context.Context, db bun.IDB, models ...*R) error {
 	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		m2mModels := r.m2mModels(tx, models...)
