@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/uptrace/bun"
 )
 
 type validateCtxKey struct{}
@@ -17,4 +18,14 @@ func ValidateFromContext(ctx context.Context) *validator.Validate {
 		return v.(*validator.Validate)
 	}
 	return nil
+}
+
+type dbCtxKey struct{}
+
+func ContextWithDB(ctx context.Context, db bun.IDB) context.Context {
+	return context.WithValue(ctx, dbCtxKey{}, db)
+}
+
+func DBFromContext(ctx context.Context) bun.IDB {
+	return ctx.Value(dbCtxKey{}).(bun.IDB)
 }
